@@ -9,6 +9,8 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Vehicles/BaseVehicle.h"
+#include "Engine/World.h"
+#include "Materials/MaterialInstance.h"
 
 AExplorerCharacter::AExplorerCharacter()
 {
@@ -255,17 +257,27 @@ void AExplorerCharacter::ExitVehicle()
 
 void AExplorerCharacter::SetCharacterAppearance(USkeletalMesh* HeadMesh, USkeletalMesh* BodyMesh)
 {
-    // This would be implemented to change different character component meshes
-    // For simplicity, we're just updating the main mesh here
+    // Update body mesh if provided
     if (BodyMesh)
     {
         GetMesh()->SetSkeletalMesh(BodyMesh);
     }
+    
+    // Handle head mesh if implemented
+    // This would require a separate component for the head
+    // Example implementation (comment out if head component doesn't exist yet):
+    /*
+    if (HeadMesh && HeadComponent)
+    {
+        HeadComponent->SetSkeletalMesh(HeadMesh);
+    }
+    */
 }
 
 void AExplorerCharacter::SetCharacterOutfit(UMaterialInstance* OutfitMaterial)
 {
-    if (OutfitMaterial)
+    // Apply the material if valid
+    if (OutfitMaterial && GetMesh())
     {
         GetMesh()->SetMaterial(0, OutfitMaterial);
     }
