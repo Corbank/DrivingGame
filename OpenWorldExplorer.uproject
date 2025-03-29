@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.3",
+	"EngineAssociation": "4.27",
 	"Category": "Game",
 	"Description": "An open world exploration game with vehicle simulation and customization",
 	"Modules": [
@@ -10,8 +10,7 @@
 			"LoadingPhase": "Default",
 			"AdditionalDependencies": [
 				"Engine",
-				"PhysicsCore",
-				"ChaosVehicles"
+				"PhysicsCore"
 			]
 		}
 	],
@@ -28,24 +27,29 @@
 			"Enabled": true
 		},
 		{
-			"Name": "ChaosVehiclesPlugin",
+			"Name": "PhysXVehicles",
 			"Enabled": true
 		},
 		{
-			"Name": "WorldCreationAssistant",
+			"Name": "WebBrowserWidget",
 			"Enabled": true
 		},
 		{
-			"Name": "PCG",
+			"Name": "OnlineSubsystemNull",
 			"Enabled": true
 		},
 		{
-			"Name": "Water",
+			"Name": "WebBrowser",
+			"Enabled": true
+		},
+		{
+			"Name": "HTML5Networking",
 			"Enabled": true
 		}
 	],
 	"TargetPlatforms": [
 		"Windows",
-		"Mac"
+		"Mac",
+		"HTML5"
 	]
 }

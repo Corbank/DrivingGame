@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    
+    <title>Open World Explorer</title>
+    
+    <style>
+        /* Style for the loading bar */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: white;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        
+        #mainarea {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            margin: 0px;
+            border: 0px;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #gameContainer {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+        }
+        
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+        }
+        
+        #loadingBox {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            margin: 0px;
+            border: 0px;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #loadingBar {
+            background-color: #333;
+            width: 50%;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+        
+        #loadingFill {
+            background-color: #4CAF50;
+            width: 0%;
+            height: 100%;
+            transition: width 0.3s;
+        }
+        
+        #loadingText {
+            color: white;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        #gameTitle {
+            font-size: 36px;
+            margin-bottom: 30px;
+            color: #4CAF50;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        #splashImage {
+            max-width: 50%;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="mainarea">
+        <div id="gameContainer">
+            <canvas id="gameCanvas" oncontextmenu="event.preventDefault()"></canvas>
+        </div>
+        
+        <div id="loadingBox">
+            <h1 id="gameTitle">Open World Explorer</h1>
+            <img id="splashImage" src="splashScreen.jpg" alt="Open World Explorer">
+            <div id="loadingText">Loading...</div>
+            <div id="loadingBar">
+                <div id="loadingFill"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        var Module = {
+            TOTAL_MEMORY: %HEAPSIZE%,
+            errorhandler: null,
+            compatibilitycheck: null,
+            dataUrl: "%DATAURL%",
+            codeUrl: "%CODEURL%",
+            memUrl: "%MEMORYURL%",
+            
+            // Customize WebGL canvas
+            canvas: (function() {
+                var canvas = document.getElementById('gameCanvas');
+                
+                // As a default initial behavior, pop up an alert when WebGL context is lost
+                canvas.addEventListener("webglcontextlost", function(e) {
+                    alert('WebGL context lost. You will need to reload the page.');
+                    e.preventDefault();
+                }, false);
+                
+                return canvas;
+            })(),
+            
+            // Custom loading progress implementation
+            setStatus: function(text) {
+                if (text === 'Running...') {
+                    // Game is loaded and running, hide loading screen
+                    document.getElementById('loadingBox').style.display = 'none';
+                    return;
+                }
+                
+                var loadingText = document.getElementById('loadingText');
+                if (loadingText) loadingText.innerHTML = text;
+                
+                var matches = text.match(/([^(]+)\((\d+)\/(\d+)\)/);
+                if (matches && matches.length >= 4) {
+                    var current = parseInt(matches[2]);
+                    var total = parseInt(matches[3]);
+                    var percent = (current / total) * 100;
+                    document.getElementById('loadingFill').style.width = percent + '%';
+                }
+            },
+            
+            // Error handling
+            print: function(text) {
+                console.log(text);
+            },
+            printErr: function(text) {
+                console.error(text);
+            }
+        };
+        
+        // Load UE4 game script
+        (function() {
+            var script = document.createElement("script");
+            script.src = "%JSCOREURL%";
+            document.body.appendChild(script);
+        })();
+    </script>
+</div>
+</body>
+</html>
