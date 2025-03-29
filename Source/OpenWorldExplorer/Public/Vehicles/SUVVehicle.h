@@ -15,10 +15,27 @@ class OPENWORLDEXPLORER_API ASUVVehicle : public ABaseVehicle
 	
 public:
 	ASUVVehicle();
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
+
+	// SUV-specific functions
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Lights")
+	void ToggleSpotlights(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Terrain")
+	void ToggleOffroadMode(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Customization")
+	void SetRoofRack(UStaticMesh* NewRoofRackMesh);
+
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Customization")
+	void SetBullBar(UStaticMesh* NewBullBarMesh);
+
+	// Override from BaseVehicle for SUV-specific handling
+	virtual void ApplyThrottle(float Value) override;
+	virtual void ApplySteering(float Value) override;
 
 protected:
-	virtual void BeginPlay() override;
-
 	// SUV-specific components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
 	class UAudioComponent* EngineSound;
@@ -47,26 +64,6 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle|Engine")
 	float MaxTorque;
-
-public:
-	virtual void Tick(float DeltaTime) override;
-
-	// SUV-specific functions
-	UFUNCTION(BlueprintCallable, Category = "Vehicle|Lights")
-	void ToggleSpotlights(bool bEnabled);
-
-	UFUNCTION(BlueprintCallable, Category = "Vehicle|Terrain")
-	void ToggleOffroadMode(bool bEnabled);
-
-	UFUNCTION(BlueprintCallable, Category = "Vehicle|Customization")
-	void SetRoofRack(UStaticMesh* NewRoofRackMesh);
-
-	UFUNCTION(BlueprintCallable, Category = "Vehicle|Customization")
-	void SetBullBar(UStaticMesh* NewBullBarMesh);
-
-	// Override from BaseVehicle for SUV-specific handling
-	virtual void ApplyThrottle(float Value) override;
-	virtual void ApplySteering(float Value) override;
 
 private:
 	// Terrain detection for SUV-specific handling
