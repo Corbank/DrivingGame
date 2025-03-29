@@ -1,14 +1,12 @@
 #include "World/WorldManager.h"
 #include "Components/DirectionalLightComponent.h"
-#include "Components/SkyLightComponent.h"
 #include "Components/SkyAtmosphereComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "Components/VolumetricCloudComponent.h"
 #include "Components/PostProcessComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/GameplayStatics.h"
-#include "Kismet/KismetMathLibrary.h"
-#include "Engine/ExponentialHeightFog.h"
-#include "Materials/MaterialParameterCollection.h"
-#include "Materials/MaterialParameterCollectionInstance.h"
+#include "Engine/DirectionalLight.h"
 
 AWorldManager::AWorldManager()
 {
@@ -17,50 +15,54 @@ AWorldManager::AWorldManager()
     // Create root component
     RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
 
-    // Create directional sun light
+    // Create the directional light (sun)
     SunLight = CreateDefaultSubobject<UDirectionalLightComponent>(TEXT("SunLight"));
     SunLight->SetupAttachment(RootComponent);
-    SunLight->SetIntensity(20.0f);
-    SunLight->SetLightColor(FColor(255, 250, 235));
-    SunLight->SetTemperature(6500.0f);
+    SunLight->Intensity = 10.0f;
+    SunLight->LightColor = FColor(255, 250, 240);
+    SunLight->SetCastShadows(true);
     SunLight->SetDynamicShadowCascades(4);
-    SunLight->SetCascadeDistributionExponent(3.0f);
-    SunLight->SetAtmosphereSunLight(true);
+    SunLight->CascadeDistributionExponent = 3.0f;
+    SunLight->DynamicShadowDistanceStationaryLight = 20000.0f;
+    SunLight->DynamicShadowDistanceMovableLight = 20000.0f;
+    SunLight->AtmosphereSunLightIndex = 0;
 
-    // Create sky atmosphere
+    // Create the sky atmosphere
     SkyAtmosphere = CreateDefaultSubobject<USkyAtmosphereComponent>(TEXT("SkyAtmosphere"));
     SkyAtmosphere->SetupAttachment(RootComponent);
-    
-    // Create sky light
+
+    // Create the sky light
     SkyLight = CreateDefaultSubobject<USkyLightComponent>(TEXT("SkyLight"));
     SkyLight->SetupAttachment(RootComponent);
     SkyLight->SourceType = ESkyLightSourceType::SLS_CapturedScene;
     SkyLight->bRealTimeCapture = true;
-    
-    // Create volumetric clouds
+    SkyLight->Intensity = 1.0f;
+
+    // Create the volumetric clouds
     VolumetricClouds = CreateDefaultSubobject<UVolumetricCloudComponent>(TEXT("VolumetricClouds"));
     VolumetricClouds->SetupAttachment(RootComponent);
-    
-    // Create post process component for weather effects
+
+    // Create the post process component for weather effects
     WeatherPostProcess = CreateDefaultSubobject<UPostProcessComponent>(TEXT("WeatherPostProcess"));
     WeatherPostProcess->SetupAttachment(RootComponent);
     WeatherPostProcess->bUnbound = true;
-    WeatherPostProcess->Priority = 1.0f;
-    
+
     // Set default values
-    TimeOfDay = 12.0f;  // Start at noon
-    TimeScale = 1.0f;   // Normal time speed
+    TimeOfDay = 12.0f; // Start at noon
+    TimeScale = 0.05f; // 1 real second = 0.05 game hours (1440x real time)
     bUseRealTime = false;
-    CurrentWeather = EWeatherType::Clear;
     WeatherChangeProbability = 0.05f; // 5% chance per minute
+    CurrentWeather = EWeatherType::Clear;
 }
 
 void AWorldManager::BeginPlay()
 {
     Super::BeginPlay();
     
-    // Initialize the sun position and weather effects
+    // Initialize sun position
     UpdateSunPosition();
+    
+    // Initialize weather effects
     UpdateWeatherEffects();
 }
 
@@ -68,26 +70,35 @@ void AWorldManager::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
-    if (bUseRealTime)
-    {
-        // Get real-world time
-        FDateTime Now = FDateTime::Now();
-        TimeOfDay = Now.GetHour() + Now.GetMinute() / 60.0f;
-    }
-    else
+    if (!bUseRealTime)
     {
         // Update time of day
-        TimeOfDay += DeltaTime * TimeScale / 60.0f; // Convert from real seconds to game minutes
-        if (TimeOfDay >= 24.0f)
+        TimeOfDay += DeltaTime * TimeScale;
+        
+        // Wrap around to keep between 0-24
+        while (TimeOfDay >= 24.0f)
         {
             TimeOfDay -= 24.0f;
         }
+        
+        // Update sun position based on new time
+        UpdateSunPosition();
     }
-
-    // Update the sun position
-    UpdateSunPosition();
+    else
+    {
+        // Get the real-world time and set the game time accordingly
+        FDateTime RealWorldTime = FDateTime::Now();
+        float Hours = RealWorldTime.GetHour();
+        float Minutes = RealWorldTime.GetMinute();
+        float Seconds = RealWorldTime.GetSecond();
+        
+        TimeOfDay = Hours + (Minutes / 60.0f) + (Seconds / 3600.0f);
+        
+        // Update sun position
+        UpdateSunPosition();
+    }
     
-    // Try random weather change
+    // Check for random weather changes
     TryRandomWeatherChange(DeltaTime);
 }
 
@@ -109,124 +120,206 @@ void AWorldManager::SetWeather(EWeatherType NewWeather)
 void AWorldManager::UpdateSunPosition()
 {
     // Convert time of day to sun rotation
-    // This is a simplified model where noon = sun directly overhead
-    float SunAngle = ((TimeOfDay - 12.0f) / 12.0f) * 180.0f;
-    FRotator SunRotation(-SunAngle, 0.0f, 0.0f);
-    SunLight->SetRelativeRotation(SunRotation);
+    // At 6 AM (6.0), sun is at horizon (270 degrees)
+    // At noon (12.0), sun is at zenith (0 degrees)
+    // At 6 PM (18.0), sun is at horizon (90 degrees)
+    // At midnight (0.0 or 24.0), sun is at nadir (180 degrees)
     
-    // Adjust light intensity based on time of day
-    float DayNightAlpha = FMath::Cos(FMath::DegreesToRadians(SunAngle));
-    DayNightAlpha = FMath::Clamp((DayNightAlpha + 1.0f) / 2.0f, 0.0f, 1.0f);
+    float SunAngle = FMath::DegreesToRadians((TimeOfDay - 12.0f) * 15.0f);
     
-    // Intensity ranges from 0.1 (night) to 20.0 (day)
-    float Intensity = FMath::Lerp(0.1f, 20.0f, DayNightAlpha);
-    SunLight->SetIntensity(Intensity);
+    // Calculate sun rotation
+    float SunPitch = -FMath::Sin(SunAngle) * 90.0f;
+    float SunYaw = 0.0f; // East-West axis
     
-    // Adjust light color based on time of day (warmer at sunrise/sunset)
-    float ColorTemp = FMath::Lerp(2500.0f, 6500.0f, DayNightAlpha);
-    SunLight->SetTemperature(ColorTemp);
+    FRotator SunRotation(SunPitch, SunYaw, 0.0f);
+    SunLight->SetWorldRotation(SunRotation);
     
-    // Update sky light intensity
-    SkyLight->SetIntensity(FMath::Lerp(0.02f, 1.0f, DayNightAlpha));
+    // Adjust sun intensity and color based on time of day
+    float SunHeight = FMath::Sin((TimeOfDay - 6.0f) / 12.0f * PI);
+    float SunIntensity = FMath::Max(SunHeight, 0.0f) * 10.0f + 0.1f;
     
-    // Need to recapture sky when sun position changes significantly
-    static float LastCaptureTime = -1.0f;
-    if (FMath::Abs(TimeOfDay - LastCaptureTime) > 0.5f) // Every half hour of game time
+    SunLight->SetIntensity(SunIntensity);
+    
+    // Adjust sun color - warmer at sunrise/sunset, cooler at midday
+    float DayCycle = FMath::Sin((TimeOfDay - 6.0f) / 12.0f * PI);
+    FLinearColor SunColor;
+    
+    if (DayCycle > 0.0f)
+    {
+        // Day time
+        float TimeFactor = FMath::Clamp(DayCycle, 0.0f, 0.5f) * 2.0f; // 0-1 from sunrise to noon
+        if (TimeFactor < 0.5f)
+        {
+            // Sunrise - orange to white
+            SunColor = FLinearColor::LerpUsingHSV(
+                FLinearColor(1.0f, 0.6f, 0.3f), // Warm orange
+                FLinearColor(1.0f, 1.0f, 0.95f), // Almost white
+                TimeFactor * 2.0f);
+        }
+        else
+        {
+            // Mid-day to sunset - white to orange
+            SunColor = FLinearColor::LerpUsingHSV(
+                FLinearColor(1.0f, 1.0f, 0.95f), // Almost white
+                FLinearColor(1.0f, 0.5f, 0.2f), // Deep orange
+                (TimeFactor - 0.5f) * 2.0f);
+        }
+    }
+    else
+    {
+        // Night time - moonlight is blueish
+        SunColor = FLinearColor(0.7f, 0.8f, 1.0f);
+    }
+    
+    SunLight->SetLightColor(SunColor);
+    
+    // Update skylight intensity based on time of day
+    float SkyIntensity = FMath::Max(SunHeight, 0.0f) * 0.8f + 0.2f;
+    SkyLight->SetIntensity(SkyIntensity);
+    
+    // At night, generate a recapture to get correct night sky
+    if (DayCycle <= 0 && TimeOfDay != 0.0f)
     {
         SkyLight->RecaptureSky();
-        LastCaptureTime = TimeOfDay;
     }
 }
 
 void AWorldManager::UpdateWeatherEffects()
 {
-    // This would normally involve parameters for various effects like
-    // fog density, cloud coverage, rain particle systems, etc.
+    // Configure weather effects based on current weather type
+    if (!WeatherPostProcess)
+    {
+        return;
+    }
     
-    // For demonstration purposes, let's adjust cloud coverage and fog based on weather type
+    // Reset all weather-related settings
+    WeatherPostProcess->Settings.bOverride_BloomIntensity = false;
+    WeatherPostProcess->Settings.bOverride_AutoExposureBias = false;
+    WeatherPostProcess->Settings.bOverride_VignetteIntensity = false;
+    WeatherPostProcess->Settings.bOverride_ColorGamma = false;
+    
+    // Update volumetric clouds based on weather
+    if (VolumetricClouds)
+    {
+        // Default cloud settings
+        VolumetricClouds->SetLayerBottomAltitude(5000.0f);
+        VolumetricClouds->SetLayerHeight(10000.0f);
+        VolumetricClouds->SetCoverageType(0);
+    }
+    
+    // Apply settings based on weather type
     switch (CurrentWeather)
     {
         case EWeatherType::Clear:
-            // Lower cloud coverage
-            VolumetricClouds->LayerBottomAltitude = 5000.0f;
-            VolumetricClouds->LayerHeight = 5000.0f;
-            VolumetricClouds->SetCoverage(0.2f);
+            if (VolumetricClouds)
+            {
+                VolumetricClouds->SetCoverageType(0);
+            }
             break;
             
         case EWeatherType::Cloudy:
-            // Increase cloud coverage
-            VolumetricClouds->LayerBottomAltitude = 3000.0f;
-            VolumetricClouds->LayerHeight = 8000.0f;
-            VolumetricClouds->SetCoverage(0.7f);
+            if (VolumetricClouds)
+            {
+                VolumetricClouds->SetCoverageType(2); // More cloud coverage
+            }
+            
+            // Slight exposure adjustment
+            WeatherPostProcess->Settings.bOverride_AutoExposureBias = true;
+            WeatherPostProcess->Settings.AutoExposureBias = -0.5f;
             break;
             
         case EWeatherType::Rain:
-            // Heavy cloud coverage and potentially rain particles
-            VolumetricClouds->LayerBottomAltitude = 2000.0f;
-            VolumetricClouds->LayerHeight = 10000.0f;
-            VolumetricClouds->SetCoverage(0.9f);
+            if (VolumetricClouds)
+            {
+                VolumetricClouds->SetCoverageType(3); // Heavy cloud coverage
+            }
             
-            // Additional rain effects would be spawned here
-            // SpawnRainParticleSystem();
+            // Darker, cooler rain settings
+            WeatherPostProcess->Settings.bOverride_AutoExposureBias = true;
+            WeatherPostProcess->Settings.AutoExposureBias = -1.0f;
+            
+            WeatherPostProcess->Settings.bOverride_ColorGamma = true;
+            WeatherPostProcess->Settings.ColorGamma = FVector4(0.9f, 0.95f, 1.05f, 1.0f);
+            
+            // Start rain particle effect if we had one
+            
             break;
             
         case EWeatherType::Storm:
-            // Very heavy clouds, rain, and lightning
-            VolumetricClouds->LayerBottomAltitude = 1500.0f;
-            VolumetricClouds->LayerHeight = 12000.0f;
-            VolumetricClouds->SetCoverage(1.0f);
+            if (VolumetricClouds)
+            {
+                VolumetricClouds->SetCoverageType(4); // Maximum cloud coverage
+                VolumetricClouds->SetLayerBottomAltitude(2000.0f); // Lower clouds
+            }
             
-            // Additional storm effects would be spawned here
-            // SpawnStormEffects();
+            // Dark, dramatic storm settings
+            WeatherPostProcess->Settings.bOverride_AutoExposureBias = true;
+            WeatherPostProcess->Settings.AutoExposureBias = -1.5f;
+            
+            WeatherPostProcess->Settings.bOverride_VignetteIntensity = true;
+            WeatherPostProcess->Settings.VignetteIntensity = 0.5f;
+            
+            WeatherPostProcess->Settings.bOverride_ColorGamma = true;
+            WeatherPostProcess->Settings.ColorGamma = FVector4(0.85f, 0.9f, 1.1f, 1.0f);
+            
+            // Start storm particle effects and lightning
+            
             break;
             
         case EWeatherType::Fog:
-            // Add height fog
-            VolumetricClouds->SetCoverage(0.4f);
+            if (VolumetricClouds)
+            {
+                VolumetricClouds->SetCoverageType(1); // Light cloud coverage
+                VolumetricClouds->SetLayerBottomAltitude(0.0f); // Ground-level clouds
+                VolumetricClouds->SetLayerHeight(5000.0f); // Thinner layer
+            }
             
-            // Additional fog would be manipulated through an ExponentialHeightFog actor
+            // Muted, hazy fog settings
+            WeatherPostProcess->Settings.bOverride_BloomIntensity = true;
+            WeatherPostProcess->Settings.BloomIntensity = 1.5f;
+            
+            WeatherPostProcess->Settings.bOverride_AutoExposureBias = true;
+            WeatherPostProcess->Settings.AutoExposureBias = 0.5f;
+            
+            // Apply fog effect
+            
             break;
             
         case EWeatherType::Snow:
-            // Snow clouds and particles
-            VolumetricClouds->LayerBottomAltitude = 2000.0f;
-            VolumetricClouds->LayerHeight = 9000.0f;
-            VolumetricClouds->SetCoverage(0.8f);
+            if (VolumetricClouds)
+            {
+                VolumetricClouds->SetCoverageType(3); // Heavy cloud coverage
+            }
             
-            // Additional snow effects would be spawned here
-            // SpawnSnowParticleSystem();
+            // Bright, cool snow settings
+            WeatherPostProcess->Settings.bOverride_AutoExposureBias = true;
+            WeatherPostProcess->Settings.AutoExposureBias = 0.2f;
+            
+            WeatherPostProcess->Settings.bOverride_ColorGamma = true;
+            WeatherPostProcess->Settings.ColorGamma = FVector4(0.95f, 1.0f, 1.05f, 1.0f);
+            
+            // Start snow particle effect
+            
             break;
     }
-    
-    // For a complete implementation, we would also:
-    // 1. Adjust post process settings to match weather
-    // 2. Spawn and control particle systems for precipitation
-    // 3. Update material parameters for wet/snowy surfaces
-    // 4. Adjust sound effects for ambient weather
 }
 
 void AWorldManager::TryRandomWeatherChange(float DeltaTime)
 {
-    // Calculate probability of weather changing this frame
-    float ProbabilityThisFrame = WeatherChangeProbability * (DeltaTime / 60.0f);
+    // Calculate chance of weather change this frame
+    // Convert probability per minute to probability per second to per frame
+    float ProbabilityPerFrame = WeatherChangeProbability / 60.0f * DeltaTime;
     
-    if (FMath::FRand() < ProbabilityThisFrame)
+    // Check for weather change
+    if (FMath::FRand() < ProbabilityPerFrame)
     {
-        // Select a new random weather type, excluding the current one
-        TArray<EWeatherType> PossibleWeathers;
-        for (int32 i = 0; i < (int32)EWeatherType::Snow + 1; i++)
-        {
-            EWeatherType WeatherType = (EWeatherType)i;
-            if (WeatherType != CurrentWeather)
-            {
-                PossibleWeathers.Add(WeatherType);
-            }
-        }
+        // Select a new random weather type
+        EWeatherType NewWeather = static_cast<EWeatherType>(FMath::RandRange(0, static_cast<int32>(EWeatherType::Snow)));
         
-        if (PossibleWeathers.Num() > 0)
+        // Don't pick the same weather
+        if (NewWeather != CurrentWeather)
         {
-            int32 RandomIndex = FMath::RandRange(0, PossibleWeathers.Num() - 1);
-            SetWeather(PossibleWeathers[RandomIndex]);
+            SetWeather(NewWeather);
         }
     }
 }

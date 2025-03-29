@@ -2,58 +2,110 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
-#include "ChaosVehicleMovementComponent.h"
 #include "BaseVehicle.generated.h"
 
-UCLASS(Abstract, BlueprintType)
+/**
+ * Base vehicle class for all vehicles in the Open World Explorer game
+ */
+UCLASS()
 class OPENWORLDEXPLORER_API ABaseVehicle : public APawn
 {
-    GENERATED_BODY()
-
-public:
-    // Sets default values for this pawn's properties
-    ABaseVehicle();
+	GENERATED_BODY()
+	
+public:	
+	ABaseVehicle();
 
 protected:
-    // Called when the game starts or when spawned
-    virtual void BeginPlay() override;
+	virtual void BeginPlay() override;
 
-    // Vehicle mesh component
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
-    class USkeletalMeshComponent* VehicleMesh;
+	// Core vehicle components
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
+	class USkeletalMeshComponent* VehicleMesh;
 
-    // Vehicle movement component
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
-    class UChaosVehicleMovementComponent* VehicleMovement;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vehicle")
+	class UChaosVehicleMovementComponent* VehicleMovement;
 
-    // Camera spring arm component
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
-    class USpringArmComponent* CameraSpringArm;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+	class USpringArmComponent* CameraBoom;
 
-    // Camera component
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
-    class UCameraComponent* Camera;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+	class UCameraComponent* FollowCamera;
 
-public:
-    // Called every frame
-    virtual void Tick(float DeltaTime) override;
+	// Vehicle properties
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+	float MaxSpeed;
 
-    // Called to bind functionality to input
-    virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+	float Acceleration;
 
-    // Input functions
-    void ApplyThrottle(float Value);
-    void ApplySteering(float Value);
-    void ApplyHandbrake();
-    void ReleaseHandbrake();
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+	float BrakingForce;
 
-    // Customization functions
-    UFUNCTION(BlueprintCallable, Category = "Vehicle|Customization")
-    virtual void SetVehicleColor(const FLinearColor& Color);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vehicle")
+	float TurnRate;
 
-    UFUNCTION(BlueprintCallable, Category = "Vehicle|Customization")
-    virtual void SetWheelType(int32 WheelTypeIndex);
+	// Input bindings
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
+	class UInputMappingContext* VehicleMappingContext;
 
-    UFUNCTION(BlueprintCallable, Category = "Vehicle|Customization")
-    virtual void AddVehicleAccessory(class UStaticMeshComponent* AccessoryMesh, FName SocketName);
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
+	class UInputAction* ThrottleAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
+	class UInputAction* SteeringAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
+	class UInputAction* BrakeAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
+	class UInputAction* HandbrakeAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
+	class UInputAction* CameraToggleAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input)
+	class UInputAction* ExitVehicleAction;
+
+public:	
+	virtual void Tick(float DeltaTime) override;
+	
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	// Vehicle control functions
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Control")
+	virtual void ApplyThrottle(float Value);
+
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Control")
+	virtual void ApplySteering(float Value);
+
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Control")
+	virtual void ApplyBrake(float Value);
+
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Control")
+	virtual void ApplyHandbrake(bool bEnabled);
+
+	// Camera functions
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Camera")
+	void ToggleCameraView();
+
+	// Exit vehicle function
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Interaction")
+	void ExitVehicle();
+
+	// Customization functions
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Customization")
+	virtual void SetVehicleColor(const FLinearColor& Color);
+
+	UFUNCTION(BlueprintCallable, Category = "Vehicle|Customization")
+	void AddVehicleAccessory(USceneComponent* AccessoryComponent, FName SocketName);
+
+private:
+	// Current camera view state
+	bool bIsFirstPersonView;
+
+	// Process input for Enhanced Input system
+	void ProcessThrottleInput(const struct FInputActionValue& Value);
+	void ProcessSteeringInput(const struct FInputActionValue& Value);
+	void ProcessBrakeInput(const struct FInputActionValue& Value);
+	void ProcessHandbrakeInput(const struct FInputActionValue& Value);
 };
