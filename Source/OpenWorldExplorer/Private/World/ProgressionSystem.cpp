@@ -54,24 +54,12 @@ UProgressionSystem::UProgressionSystem()
     ExplorationLevel = 1;
     
     // Define level thresholds
-    LevelThresholds = {
-        0,      // Level 1 (starting level)
-        1000,   // Level 2
-        2500,   // Level 3
-        5000,   // Level 4
-        10000,  // Level 5
-        15000,  // Level 6
-        25000,  // Level 7
-        40000,  // Level 8
-        60000,  // Level 9
-        100000  // Level 10
-    };
+    LevelThresholds = { 0, 1000, 2500, 5000, 10000, 15000, 25000, 40000, 60000, 100000 };
 }
 
 void UProgressionSystem::Tick(float DeltaTime)
 {
-    // Nothing to tick for now, but we could use this to track real-time progress
-    // like time spent in game, etc.
+    // Nothing to tick for now
 }
 
 bool UProgressionSystem::IsTickable() const
@@ -91,70 +79,8 @@ void UProgressionSystem::Initialize()
     {
         // If no save data, set up default values
         CreateDefaultAchievements();
-        
-        // Set up default vehicle unlocks
-        FVehicleUnlock DefaultCar;
-        DefaultCar.VehicleName = "Standard Sedan";
-        DefaultCar.bIsUnlocked = true;
-        DefaultCar.RequiredExplorationPoints = 0;
-        VehicleUnlocks.Add(DefaultCar);
-        
-        FVehicleUnlock SUV;
-        SUV.VehicleName = "Explorer SUV";
-        SUV.bIsUnlocked = false;
-        SUV.RequiredExplorationPoints = 2000;
-        VehicleUnlocks.Add(SUV);
-        
-        FVehicleUnlock SportsCar;
-        SportsCar.VehicleName = "Sports Coupe";
-        SportsCar.bIsUnlocked = false;
-        SportsCar.RequiredExplorationPoints = 5000;
-        VehicleUnlocks.Add(SportsCar);
-        
-        // Set up default customization options
-        // Vehicle paint colors
-        TArray<FString> PaintColors = { "Red", "Blue", "White", "Black", "Silver" };
-        for (int32 i = 0; i < PaintColors.Num(); i++)
-        {
-            FCustomizationUnlock PaintUnlock;
-            PaintUnlock.UnlockName = PaintColors[i] + " Paint";
-            PaintUnlock.Category = "Vehicle";
-            PaintUnlock.ItemType = "Paint";
-            PaintUnlock.ItemID = PaintColors[i];
-            PaintUnlock.bIsUnlocked = (i < 3); // First three are unlocked by default
-            PaintUnlock.RequiredExplorationPoints = i * 500;
-            CustomizationUnlocks.Add(PaintUnlock);
-        }
-        
-        // Vehicle wheels
-        TArray<FString> WheelTypes = { "Standard", "Sport", "Offroad", "Luxury" };
-        for (int32 i = 0; i < WheelTypes.Num(); i++)
-        {
-            FCustomizationUnlock WheelUnlock;
-            WheelUnlock.UnlockName = WheelTypes[i] + " Wheels";
-            WheelUnlock.Category = "Vehicle";
-            WheelUnlock.ItemType = "Wheels";
-            WheelUnlock.ItemID = WheelTypes[i];
-            WheelUnlock.bIsUnlocked = (i < 2); // First two are unlocked by default
-            WheelUnlock.RequiredExplorationPoints = i * 800;
-            CustomizationUnlocks.Add(WheelUnlock);
-        }
-        
-        // Character outfits
-        TArray<FString> OutfitTypes = { "Casual", "Explorer", "Formal", "Sport" };
-        for (int32 i = 0; i < OutfitTypes.Num(); i++)
-        {
-            FCustomizationUnlock OutfitUnlock;
-            OutfitUnlock.UnlockName = OutfitTypes[i] + " Outfit";
-            OutfitUnlock.Category = "Character";
-            OutfitUnlock.ItemType = "Outfit";
-            OutfitUnlock.ItemID = OutfitTypes[i];
-            OutfitUnlock.bIsUnlocked = (i < 2); // First two are unlocked by default
-            OutfitUnlock.RequiredExplorationPoints = i * 1000;
-            CustomizationUnlocks.Add(OutfitUnlock);
-        }
-        
-        // Save initial data
+        SetupDefaultVehicles();
+        SetupDefaultCustomizations();
         SaveProgressionData();
     }
 }
@@ -508,13 +434,7 @@ void UProgressionSystem::UpdateExplorationLevel()
     // Check if level has increased
     if (NewLevel > ExplorationLevel)
     {
-        int32 LevelsGained = NewLevel - ExplorationLevel;
         ExplorationLevel = NewLevel;
-        
-        // Level up rewards could be given here
-        // For example, a bonus for each level
-        
-        // Check for unlocks based on new level
         CheckForUnlocks();
     }
 }
@@ -583,8 +503,6 @@ void UProgressionSystem::AwardExplorationPoints(int32 Points)
 void UProgressionSystem::CheckAchievements()
 {
     // This function could have additional logic for checking achievement progress
-    // based on game state or other conditions that aren't directly updated through
-    // the standard UpdateAchievementProgress method
 }
 
 void UProgressionSystem::CreateDefaultAchievements()
@@ -606,6 +524,72 @@ void UProgressionSystem::CreateDefaultAchievements()
     Achievements.Add(CreateAchievement("Shutterbug", "Take 10 photographs", "Photos", 10.0f, 100));
     Achievements.Add(CreateAchievement("Photographer", "Take 25 photographs", "Photos", 25.0f, 250));
     Achievements.Add(CreateAchievement("Photojournalist", "Photograph 15 different locations", "LocationPhotos", 15.0f, 300));
+}
+
+void UProgressionSystem::SetupDefaultVehicles()
+{
+    FVehicleUnlock DefaultCar;
+    DefaultCar.VehicleName = "Standard Sedan";
+    DefaultCar.bIsUnlocked = true;
+    DefaultCar.RequiredExplorationPoints = 0;
+    VehicleUnlocks.Add(DefaultCar);
+    
+    FVehicleUnlock SUV;
+    SUV.VehicleName = "Explorer SUV";
+    SUV.bIsUnlocked = false;
+    SUV.RequiredExplorationPoints = 2000;
+    VehicleUnlocks.Add(SUV);
+    
+    FVehicleUnlock SportsCar;
+    SportsCar.VehicleName = "Sports Coupe";
+    SportsCar.bIsUnlocked = false;
+    SportsCar.RequiredExplorationPoints = 5000;
+    VehicleUnlocks.Add(SportsCar);
+}
+
+void UProgressionSystem::SetupDefaultCustomizations()
+{
+    // Vehicle paint colors
+    TArray<FString> PaintColors = { "Red", "Blue", "White", "Black", "Silver" };
+    for (int32 i = 0; i < PaintColors.Num(); i++)
+    {
+        FCustomizationUnlock PaintUnlock;
+        PaintUnlock.UnlockName = PaintColors[i] + " Paint";
+        PaintUnlock.Category = "Vehicle";
+        PaintUnlock.ItemType = "Paint";
+        PaintUnlock.ItemID = PaintColors[i];
+        PaintUnlock.bIsUnlocked = (i < 3); // First three are unlocked by default
+        PaintUnlock.RequiredExplorationPoints = i * 500;
+        CustomizationUnlocks.Add(PaintUnlock);
+    }
+    
+    // Vehicle wheels
+    TArray<FString> WheelTypes = { "Standard", "Sport", "Offroad", "Luxury" };
+    for (int32 i = 0; i < WheelTypes.Num(); i++)
+    {
+        FCustomizationUnlock WheelUnlock;
+        WheelUnlock.UnlockName = WheelTypes[i] + " Wheels";
+        WheelUnlock.Category = "Vehicle";
+        WheelUnlock.ItemType = "Wheels";
+        WheelUnlock.ItemID = WheelTypes[i];
+        WheelUnlock.bIsUnlocked = (i < 2); // First two are unlocked by default
+        WheelUnlock.RequiredExplorationPoints = i * 800;
+        CustomizationUnlocks.Add(WheelUnlock);
+    }
+    
+    // Character outfits
+    TArray<FString> OutfitTypes = { "Casual", "Explorer", "Formal", "Sport" };
+    for (int32 i = 0; i < OutfitTypes.Num(); i++)
+    {
+        FCustomizationUnlock OutfitUnlock;
+        OutfitUnlock.UnlockName = OutfitTypes[i] + " Outfit";
+        OutfitUnlock.Category = "Character";
+        OutfitUnlock.ItemType = "Outfit";
+        OutfitUnlock.ItemID = OutfitTypes[i];
+        OutfitUnlock.bIsUnlocked = (i < 2); // First two are unlocked by default
+        OutfitUnlock.RequiredExplorationPoints = i * 1000;
+        CustomizationUnlocks.Add(OutfitUnlock);
+    }
 }
 
 FAchievement UProgressionSystem::CreateAchievement(const FString& Name, const FString& Description, const FString& Type, float Target, int32 Reward)

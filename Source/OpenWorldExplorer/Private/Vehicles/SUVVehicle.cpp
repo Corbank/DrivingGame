@@ -3,7 +3,6 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
-#include "Sound/SoundCue.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -70,8 +69,6 @@ void ASUVVehicle::BeginPlay()
             // Increase suspension to handle rough terrain
             SUVMovement->WheelSetups[WheelIdx].SuspensionMaxRaise = 15.0f;
             SUVMovement->WheelSetups[WheelIdx].SuspensionMaxDrop = 15.0f;
-            
-            // Adjust damping for off-road
             SUVMovement->WheelSetups[WheelIdx].SuspensionDampingRatio = 0.7f;
         }
         
@@ -97,18 +94,11 @@ void ASUVVehicle::Tick(float DeltaTime)
         float CurrentRPM = SUVMovement->GetEngineRotationSpeed();
         float RPMRatio = FMath::Clamp(CurrentRPM / 7000.0f, 0.0f, 1.0f);
         
-        // Adjust pitch based on RPM
-        float BasePitch = 0.8f;
-        float MaxPitchMultiplier = 2.5f;
-        float CurrentPitch = BasePitch + (MaxPitchMultiplier - BasePitch) * RPMRatio;
+        // Adjust pitch and volume based on RPM
+        float CurrentPitch = 0.8f + (2.5f - 0.8f) * RPMRatio;
+        float CurrentVolume = 0.4f + (1.0f - 0.4f) * RPMRatio;
         
         EngineSound->SetPitchMultiplier(CurrentPitch);
-        
-        // Adjust volume based on RPM
-        float MinVolume = 0.4f;
-        float MaxVolume = 1.0f;
-        float CurrentVolume = MinVolume + (MaxVolume - MinVolume) * RPMRatio;
-        
         EngineSound->SetVolumeMultiplier(CurrentVolume);
     }
 }
@@ -136,34 +126,20 @@ void ASUVVehicle::ToggleOffroadMode(bool bEnabled)
     UChaosWheeledVehicleMovementComponent* SUVMovement = Cast<UChaosWheeledVehicleMovementComponent>(VehicleMovement);
     if (SUVMovement)
     {
-        if (bEnabled)
+        // Adjust tire friction and suspension based on mode
+        float TireFriction = bEnabled ? 3.0f : 2.0f;
+        float SuspensionForce = bEnabled ? 8.0f : 4.0f;
+        float SuspensionMaxRaise = bEnabled ? 15.0f : 10.0f;
+        float SuspensionMaxDrop = bEnabled ? 15.0f : 10.0f;
+        
+        for (int32 WheelIdx = 0; WheelIdx < SUVMovement->WheelSetups.Num(); WheelIdx++)
         {
-            // Enhance traction for off-road
-            for (int32 WheelIdx = 0; WheelIdx < SUVMovement->WheelSetups.Num(); WheelIdx++)
-            {
-                // Adjust tire friction for off-road
-                SUVMovement->WheelSetups[WheelIdx].TireConfig->TireFriction = 3.0f;
-            }
-            
-            // Adjust suspension for more off-road travel
-            SUVMovement->SuspensionForceOffset = 8.0f;
-            SUVMovement->SuspensionMaxRaise = 15.0f;
-            SUVMovement->SuspensionMaxDrop = 15.0f;
+            SUVMovement->WheelSetups[WheelIdx].TireConfig->TireFriction = TireFriction;
         }
-        else
-        {
-            // Return to normal road settings
-            for (int32 WheelIdx = 0; WheelIdx < SUVMovement->WheelSetups.Num(); WheelIdx++)
-            {
-                // Standard tire friction
-                SUVMovement->WheelSetups[WheelIdx].TireConfig->TireFriction = 2.0f;
-            }
-            
-            // Standard suspension
-            SUVMovement->SuspensionForceOffset = 4.0f;
-            SUVMovement->SuspensionMaxRaise = 10.0f;
-            SUVMovement->SuspensionMaxDrop = 10.0f;
-        }
+        
+        SUVMovement->SuspensionForceOffset = SuspensionForce;
+        SUVMovement->SuspensionMaxRaise = SuspensionMaxRaise;
+        SUVMovement->SuspensionMaxDrop = SuspensionMaxDrop;
     }
     
     // Play mode change sound effect
@@ -172,29 +148,33 @@ void ASUVVehicle::ToggleOffroadMode(bool bEnabled)
 
 void ASUVVehicle::SetRoofRack(UStaticMesh* NewRoofRackMesh)
 {
-    if (RoofRackMesh && NewRoofRackMesh)
+    if (RoofRackMesh)
     {
-        RoofRackMesh->SetStaticMesh(NewRoofRackMesh);
-        RoofRackMesh->SetVisibility(true);
-    }
-    else if (RoofRackMesh)
-    {
-        // No mesh provided, hide the roof rack
-        RoofRackMesh->SetVisibility(false);
+        if (NewRoofRackMesh)
+        {
+            RoofRackMesh->SetStaticMesh(NewRoofRackMesh);
+            RoofRackMesh->SetVisibility(true);
+        }
+        else
+        {
+            RoofRackMesh->SetVisibility(false);
+        }
     }
 }
 
 void ASUVVehicle::SetBullBar(UStaticMesh* NewBullBarMesh)
 {
-    if (BullBarMesh && NewBullBarMesh)
+    if (BullBarMesh)
     {
-        BullBarMesh->SetStaticMesh(NewBullBarMesh);
-        BullBarMesh->SetVisibility(true);
-    }
-    else if (BullBarMesh)
-    {
-        // No mesh provided, hide the bull bar
-        BullBarMesh->SetVisibility(false);
+        if (NewBullBarMesh)
+        {
+            BullBarMesh->SetStaticMesh(NewBullBarMesh);
+            BullBarMesh->SetVisibility(true);
+        }
+        else
+        {
+            BullBarMesh->SetVisibility(false);
+        }
     }
 }
 
@@ -208,16 +188,7 @@ void ASUVVehicle::ApplyThrottle(float Value)
         CurrentTerrainType == TEXT("Sand"))
     {
         // Off-road surfaces
-        if (bOffroadModeEnabled)
-        {
-            // Better response in off-road mode
-            ModifiedThrottle = Value * OffroadTractionMultiplier;
-        }
-        else
-        {
-            // Reduced response on off-road without off-road mode
-            ModifiedThrottle = Value * 0.8f;
-        }
+        ModifiedThrottle = Value * (bOffroadModeEnabled ? OffroadTractionMultiplier : 0.8f);
     }
     else if (CurrentTerrainType == TEXT("Snow") || 
              CurrentTerrainType == TEXT("Ice"))
@@ -244,10 +215,9 @@ void ASUVVehicle::ApplySteering(float Value)
         CurrentTerrainType == TEXT("Grass") || 
         CurrentTerrainType == TEXT("Sand"))
     {
-        // Off-road surfaces
+        // Off-road surfaces - more controlled steering in off-road mode
         if (bOffroadModeEnabled)
         {
-            // More controlled steering in off-road mode
             ModifiedSteering = Value * 0.85f;
         }
     }
@@ -272,15 +242,7 @@ void ASUVVehicle::UpdateTerrainDetection()
     FCollisionQueryParams QueryParams;
     QueryParams.AddIgnoredActor(this);
     
-    bool bHit = GetWorld()->LineTraceSingleByChannel(
-        HitResult, 
-        Start, 
-        End, 
-        ECC_Visibility, 
-        QueryParams
-    );
-    
-    if (bHit)
+    if (GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, QueryParams))
     {
         // Check the physical material to determine surface type
         UPhysicalMaterial* PhysMat = HitResult.PhysMaterial.Get();
@@ -288,7 +250,6 @@ void ASUVVehicle::UpdateTerrainDetection()
         {
             // In a full implementation, we'd check the physical material
             // properties to determine the surface type
-            // For now, we'll use the actor's tag as a placeholder
             AActor* HitActor = HitResult.GetActor();
             if (HitActor && HitActor->Tags.Num() > 0)
             {
